@@ -1,82 +1,104 @@
 "use strict";
 
 /*
-  ============================================================
-  BRANKAS — FRONTEND APPLICATION
-  ============================================================
+============================================================
+BRANKAS FRONTEND
+============================================================
 
-  Catatan:
-  - Frontend ini sengaja tidak menyimpan password.
-  - Token sesi hanya digunakan selama sesi aktif.
-  - Backend URL bisa diatur melalui window.BRANKAS_CONFIG.
-  - Jika config tidak tersedia, API dianggap berada di origin
-    yang sama.
+File:
+app.js
+
+Frontend:
+GitHub Pages
+
+Backend:
+Node.js / Express
+
+API:
+window.BRANKAS_CONFIG.API_BASE
+
+Jika API_BASE kosong, frontend akan menggunakan
+origin yang sama.
 */
-
-
-/* ============================================================
-   CONFIGURATION
-   ============================================================ */
 
 const CONFIG = {
   API_BASE:
-    window.BRANKAS_CONFIG?.API_BASE ||
-    "",
-
-  SESSION_STORAGE_KEY:
-    "brankas_session",
-
-  SESSION_EXPIRES_KEY:
-    "brankas_session_expires",
+    window.BRANKAS_CONFIG?.API_BASE || "",
 
   MAX_FILE_SIZE:
-    5 * 1024 * 1024 * 1024
+    5 * 1024 * 1024 * 1024,
+
+  SESSION_KEY:
+    "brankas_session",
+
+  SESSION_EXPIRY_KEY:
+    "brankas_session_expiry"
 };
 
 
 /* ============================================================
-   APPLICATION STATE
+   STATE
    ============================================================ */
 
 const state = {
-  token: null,
-  sessionExpires: 0,
+  token:
+    sessionStorage.getItem(
+      CONFIG.SESSION_KEY
+    ) || "",
+
+  sessionExpiry:
+    Number(
+      sessionStorage.getItem(
+        CONFIG.SESSION_EXPIRY_KEY
+      ) || 0
+    ),
 
   files: [],
 
-  activePage: "vault",
+  activePage:
+    "vault",
 
-  activeSource: "vid3y",
+  activeSource:
+    "vid3y",
 
-  viewerFile: null,
+  viewerFile:
+    null,
 
-  busy: false
+  busy:
+    false
 };
 
 
 /* ============================================================
-   DOM HELPERS
+   DOM
    ============================================================ */
 
-const $ = (selector) =>
-  document.querySelector(selector);
+const $ = (
+  selector
+) =>
+  document.querySelector(
+    selector
+  );
 
-const $$ = (selector) =>
-  Array.from(document.querySelectorAll(selector));
+const $$ = (
+  selector
+) =>
+  Array.from(
+    document.querySelectorAll(
+      selector
+    )
+  );
 
 
 /* ============================================================
-   DOM REFERENCES
+   ELEMENTS
    ============================================================ */
 
 const authScreen =
   $("#authScreen");
 
-const setupPanel =
-  $("#setupPanel");
-
-const loginPanel =
-  $("#loginPanel");
+const appScreen =
+  $("#appScreen");
 
 const setupForm =
   $("#setupForm");
@@ -84,99 +106,78 @@ const setupForm =
 const loginForm =
   $("#loginForm");
 
-const authMessage =
-  $("#authMessage");
+const setupPassword =
+  $("#setupPassword");
 
-const app =
-  $("#app");
+const setupPasswordConfirm =
+  $("#setupPasswordConfirm");
 
-const connectionStatus =
-  $("#connectionStatus");
+const setupRedeem =
+  $("#setupRedeem");
 
-const logoutButton =
-  $("#logoutButton");
+const loginPassword =
+  $("#loginPassword");
 
-const navButtons =
-  $$(".nav-button");
+const authTitle =
+  $("#authTitle");
 
-const pages =
-  $$(".page");
+const authSubtitle =
+  $("#authSubtitle");
+
+const setupBox =
+  $("#setupBox");
+
+const loginBox =
+  $("#loginBox");
+
+const vaultPage =
+  $("#vaultPage");
+
+const downloaderPage =
+  $("#downloaderPage");
 
 const fileInput =
   $("#fileInput");
 
-const fileInputEmpty =
-  $("#fileInputEmpty");
-
-const refreshFilesButton =
-  $("#refreshFilesButton");
-
 const fileGrid =
   $("#fileGrid");
-
-const emptyState =
-  $("#emptyState");
 
 const fileCount =
   $("#fileCount");
 
-const uploadArea =
-  $("#uploadArea");
+const uploadProgress =
+  $("#uploadProgress");
 
 const uploadProgressBar =
   $("#uploadProgressBar");
 
-const uploadProgressText =
-  $("#uploadProgressText");
+const uploadStatus =
+  $("#uploadStatus");
 
-const uploadStatusText =
-  $("#uploadStatusText");
-
-const sourceTabs =
-  $$(".source-tab");
-
-const sourcePanels =
-  $$(".source-panel");
-
-const vid3yUrl =
-  $("#vid3yUrl");
-
-const tiktokUrl =
-  $("#tiktokUrl");
-
-const vid3yDownloadButton =
-  $("#vid3yDownloadButton");
-
-const tiktokDownloadButton =
-  $("#tiktokDownloadButton");
-
-const downloaderMessage =
-  $("#downloaderMessage");
+const emptyState =
+  $("#emptyState");
 
 const viewerModal =
   $("#viewerModal");
 
-const modalBackdrop =
-  $("#modalBackdrop");
-
-const closeViewerButton =
-  $("#closeViewerButton");
+const viewerContent =
+  $("#viewerContent");
 
 const viewerTitle =
   $("#viewerTitle");
 
-const viewerContent =
-  $("#viewerContent");
+const toastContainer =
+  $("#toastContainer");
 
-const viewerDownloadButton =
-  $("#viewerDownloadButton");
+const statusText =
+  $("#statusText");
 
-const toast =
-  $("#toast");
+const logoutButton =
+  $("#logoutButton");
 
 
 /* ============================================================
-   INITIALIZATION
+   INIT
    ============================================================ */
 
 document.addEventListener(
@@ -189,31 +190,24 @@ async function initialize() {
 
   bindEvents();
 
-  restoreSession();
+  updateStatus();
+
+  if (
+    hasValidSession()
+  ) {
+
+    showApp();
+
+    await loadFiles();
+
+    return;
+
+  }
+
+  clearSession();
 
   await checkServerStatus();
 
-  if (state.token) {
-
-    try {
-
-      await loadFiles();
-
-      showApp();
-
-    } catch {
-
-      clearSession();
-
-      await determineAuthState();
-
-    }
-
-  } else {
-
-    await determineAuthState();
-
-  }
 }
 
 
@@ -235,119 +229,109 @@ function bindEvents() {
 
   logoutButton?.addEventListener(
     "click",
-    handleLogout
-  );
-
-  refreshFilesButton?.addEventListener(
-    "click",
-    async () => {
-
-      if (!state.token) {
-        return;
-      }
-
-      await loadFiles();
-
-    }
+    logout
   );
 
   fileInput?.addEventListener(
     "change",
-    handleFileSelection
+    handleFileUpload
   );
 
-  fileInputEmpty?.addEventListener(
-    "change",
-    handleFileSelection
-  );
-
-  navButtons.forEach(
-    (button) => {
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          const page =
-            button.dataset.page;
-
-          switchPage(page);
-
-        }
-      );
-
-    }
-  );
-
-  sourceTabs.forEach(
-    (button) => {
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          const source =
-            button.dataset.source;
-
-          switchDownloaderSource(source);
-
-        }
-      );
-
-    }
-  );
-
-  vid3yDownloadButton?.addEventListener(
+  $("#refreshFiles")?.addEventListener(
     "click",
-    handleVid3yImport
+    () =>
+      loadFiles()
   );
 
-  tiktokDownloadButton?.addEventListener(
+  $("#navVault")?.addEventListener(
     "click",
-    handleTikTokImport
+    () =>
+      switchPage(
+        "vault"
+      )
   );
 
-  closeViewerButton?.addEventListener(
+  $("#navDownloader")?.addEventListener(
+    "click",
+    () =>
+      switchPage(
+        "downloader"
+      )
+  );
+
+  $("#vid3yTab")?.addEventListener(
+    "click",
+    () =>
+      switchDownloader(
+        "vid3y"
+      )
+  );
+
+  $("#tiktokTab")?.addEventListener(
+    "click",
+    () =>
+      switchDownloader(
+        "tiktok"
+      )
+  );
+
+  $("#vid3yForm")?.addEventListener(
+    "submit",
+    handleVid3y
+  );
+
+  $("#tiktokForm")?.addEventListener(
+    "submit",
+    handleTikTok
+  );
+
+  $("#closeViewer")?.addEventListener(
     "click",
     closeViewer
   );
 
-  modalBackdrop?.addEventListener(
+  viewerModal?.addEventListener(
     "click",
-    closeViewer
-  );
+    (event) => {
 
-  viewerDownloadButton?.addEventListener(
-    "click",
-    handleViewerDownload
-  );
+      if (
+        event.target ===
+        viewerModal
+      ) {
 
-  document.addEventListener(
-    "keydown",
-    handleKeyboard
+        closeViewer();
+
+      }
+
+    }
   );
 
 }
 
 
 /* ============================================================
-   AUTH STATE
+   SERVER STATUS
    ============================================================ */
 
-async function determineAuthState() {
+async function checkServerStatus() {
 
   try {
 
-    const result =
+    const data =
       await apiRequest(
         "/api/status",
         {
-          method: "GET",
-          auth: false
+          method:
+            "GET",
+
+          auth:
+            false
         }
       );
 
-    if (result.initialized) {
+    if (
+      data.initialized
+    ) {
 
       showLogin();
 
@@ -359,115 +343,11 @@ async function determineAuthState() {
 
   } catch (error) {
 
-    showAuthMessage(
-      error.message ||
-      "Backend belum dapat dihubungi."
+    showAuthError(
+      "Backend belum terhubung. Nanti kita hubungkan setelah server selesai dibuat."
     );
 
-    showLogin();
-
   }
-}
-
-
-function showSetup() {
-
-  authScreen.classList.remove(
-    "hidden"
-  );
-
-  app.classList.add(
-    "hidden"
-  );
-
-  setupPanel.classList.remove(
-    "hidden"
-  );
-
-  loginPanel.classList.add(
-    "hidden"
-  );
-
-  clearAuthMessage();
-
-}
-
-
-function showLogin() {
-
-  authScreen.classList.remove(
-    "hidden"
-  );
-
-  app.classList.add(
-    "hidden"
-  );
-
-  loginPanel.classList.remove(
-    "hidden"
-  );
-
-  setupPanel.classList.add(
-    "hidden"
-  );
-
-  clearAuthMessage();
-
-}
-
-
-function showApp() {
-
-  authScreen.classList.add(
-    "hidden"
-  );
-
-  app.classList.remove(
-    "hidden"
-  );
-
-  switchPage(
-    state.activePage || "vault"
-  );
-
-  updateConnectionStatus(
-    true
-  );
-
-}
-
-
-function showAuthMessage(
-  message,
-  success = false
-) {
-
-  if (!authMessage) {
-    return;
-  }
-
-  authMessage.textContent =
-    String(message || "");
-
-  authMessage.classList.toggle(
-    "success",
-    success
-  );
-
-}
-
-
-function clearAuthMessage() {
-
-  if (!authMessage) {
-    return;
-  }
-
-  authMessage.textContent = "";
-
-  authMessage.classList.remove(
-    "success"
-  );
 
 }
 
@@ -483,49 +363,57 @@ async function handleSetup(
   event.preventDefault();
 
   const password =
-    $("#setupPassword")?.value || "";
+    setupPassword?.value || "";
 
-  const confirmPassword =
-    $("#setupPasswordConfirm")?.value || "";
+  const confirm =
+    setupPasswordConfirm?.value ||
+    "";
 
   const redeem =
-    $("#redeemCode")?.value.trim() || "";
+    setupRedeem?.value || "";
 
-  clearAuthMessage();
+  if (
+    password.length < 12
+  ) {
 
-  if (password.length < 12) {
-
-    showAuthMessage(
-      "Password harus minimal 12 karakter."
+    showToast(
+      "Password minimal 12 karakter.",
+      "error"
     );
 
     return;
+
   }
 
-  if (password !== confirmPassword) {
+  if (
+    password !== confirm
+  ) {
 
-    showAuthMessage(
-      "Konfirmasi password tidak sama."
+    showToast(
+      "Konfirmasi password tidak sama.",
+      "error"
     );
 
     return;
+
   }
 
-  if (redeem.length < 8) {
+  if (
+    redeem.length < 8
+  ) {
 
-    showAuthMessage(
-      "Redeem code tidak valid."
+    showToast(
+      "Redeem code tidak valid.",
+      "error"
     );
 
     return;
+
   }
 
-  setButtonBusy(
-    setupForm.querySelector(
-      'button[type="submit"]'
-    ),
+  setBusy(
     true,
-    "Membuat..."
+    setupForm
   );
 
   try {
@@ -533,40 +421,40 @@ async function handleSetup(
     await apiRequest(
       "/api/setup",
       {
-        method: "POST",
+        method:
+          "POST",
+
+        auth:
+          false,
+
         body: {
           password,
           redeem
-        },
-        auth: false
+        }
       }
     );
 
-    showAuthMessage(
-      "BRANKAS berhasil dibuat. Silakan masuk.",
-      true
+    showToast(
+      "BRANKAS berhasil dibuat.",
+      "success"
     );
 
     setupForm.reset();
 
-    setTimeout(
-      showLogin,
-      700
-    );
+    showLogin();
 
   } catch (error) {
 
-    showAuthMessage(
-      error.message
+    showToast(
+      error.message,
+      "error"
     );
 
   } finally {
 
-    setButtonBusy(
-      setupForm.querySelector(
-        'button[type="submit"]'
-      ),
-      false
+    setBusy(
+      false,
+      setupForm
     );
 
   }
@@ -585,111 +473,75 @@ async function handleLogin(
   event.preventDefault();
 
   const password =
-    $("#loginPassword")?.value || "";
+    loginPassword?.value || "";
 
-  clearAuthMessage();
+  if (
+    !password
+  ) {
 
-  if (!password) {
-
-    showAuthMessage(
-      "Masukkan password."
+    showToast(
+      "Masukkan password.",
+      "error"
     );
 
     return;
+
   }
 
-  const button =
-    loginForm.querySelector(
-      'button[type="submit"]'
-    );
-
-  setButtonBusy(
-    button,
+  setBusy(
     true,
-    "Membuka..."
+    loginForm
   );
 
   try {
 
-    const result =
+    const data =
       await apiRequest(
         "/api/login",
         {
-          method: "POST",
+          method:
+            "POST",
+
+          auth:
+            false,
+
           body: {
             password
-          },
-          auth: false
+          }
         }
       );
 
-    if (!result.token) {
-
-      throw new Error(
-        "Server tidak memberikan session token."
-      );
-
-    }
-
     saveSession(
-      result.token,
-      result.expiresAt
+      data.token,
+      data.expiresAt
     );
 
     loginForm.reset();
 
-    await loadFiles();
+    showToast(
+      "Login berhasil.",
+      "success"
+    );
 
     showApp();
 
-    showToast(
-      "BRANKAS berhasil dibuka."
-    );
+    await loadFiles();
 
   } catch (error) {
 
-    showAuthMessage(
-      error.message
+    showToast(
+      error.message,
+      "error"
     );
 
   } finally {
 
-    setButtonBusy(
-      button,
-      false
+    setBusy(
+      false,
+      loginForm
     );
 
   }
-
-}
-
-
-/* ============================================================
-   LOGOUT
-   ============================================================ */
-
-function handleLogout() {
-
-  const confirmed =
-    window.confirm(
-      "Keluar dari BRANKAS?"
-    );
-
-  if (!confirmed) {
-    return;
-  }
-
-  clearSession();
-
-  state.files = [];
-
-  renderFiles();
-
-  showLogin();
-
-  showToast(
-    "Session ditutup."
-  );
 
 }
 
@@ -704,308 +556,170 @@ function saveSession(
 ) {
 
   state.token =
-    String(token);
+    String(
+      token || ""
+    );
 
-  state.sessionExpires =
-    Number(expiresAt) ||
-    (Date.now() + 30 * 60 * 1000);
+  state.sessionExpiry =
+    Number(
+      expiresAt || 0
+    );
 
   sessionStorage.setItem(
-    CONFIG.SESSION_STORAGE_KEY,
+    CONFIG.SESSION_KEY,
     state.token
   );
 
   sessionStorage.setItem(
-    CONFIG.SESSION_EXPIRES_KEY,
-    String(state.sessionExpires)
+    CONFIG.SESSION_EXPIRY_KEY,
+    String(
+      state.sessionExpiry
+    )
   );
 
-}
-
-
-function restoreSession() {
-
-  const token =
-    sessionStorage.getItem(
-      CONFIG.SESSION_STORAGE_KEY
-    );
-
-  const expires =
-    Number(
-      sessionStorage.getItem(
-        CONFIG.SESSION_EXPIRES_KEY
-      )
-    );
-
-  if (
-    !token ||
-    !expires ||
-    Date.now() >= expires
-  ) {
-
-    clearSession();
-
-    return;
-  }
-
-  state.token =
-    token;
-
-  state.sessionExpires =
-    expires;
+  updateStatus();
 
 }
 
 
 function clearSession() {
 
-  state.token = null;
+  state.token =
+    "";
 
-  state.sessionExpires = 0;
+  state.sessionExpiry =
+    0;
 
   sessionStorage.removeItem(
-    CONFIG.SESSION_STORAGE_KEY
+    CONFIG.SESSION_KEY
   );
 
   sessionStorage.removeItem(
-    CONFIG.SESSION_EXPIRES_KEY
+    CONFIG.SESSION_EXPIRY_KEY
+  );
+
+  updateStatus();
+
+}
+
+
+function hasValidSession() {
+
+  if (
+    !state.token
+  ) {
+
+    return false;
+
+  }
+
+  if (
+    !state.sessionExpiry
+  ) {
+
+    return false;
+
+  }
+
+  return (
+    Date.now() <
+    state.sessionExpiry
   );
 
 }
 
 
 /* ============================================================
-   SERVER STATUS
+   LOGOUT
    ============================================================ */
 
-async function checkServerStatus() {
+function logout() {
 
-  try {
+  clearSession();
 
-    const result =
-      await apiRequest(
-        "/api/status",
-        {
-          method: "GET",
-          auth: false
-        }
-      );
+  state.files =
+    [];
 
-    updateConnectionStatus(
-      true
-    );
+  showAuth();
 
-    return result;
-
-  } catch {
-
-    updateConnectionStatus(
-      false
-    );
-
-    return null;
-
-  }
-
-}
-
-
-function updateConnectionStatus(
-  connected
-) {
-
-  if (!connectionStatus) {
-    return;
-  }
-
-  if (connected) {
-
-    connectionStatus.textContent =
-      "TERHUBUNG";
-
-    connectionStatus.style.color =
-      "var(--success)";
-
-  } else {
-
-    connectionStatus.textContent =
-      "OFFLINE";
-
-    connectionStatus.style.color =
-      "var(--danger)";
-
-  }
+  showToast(
+    "Kamu telah logout.",
+    "success"
+  );
 
 }
 
 
 /* ============================================================
-   API REQUEST
+   PAGE SWITCHING
    ============================================================ */
 
-async function apiRequest(
-  path,
-  options = {}
+function switchPage(
+  page
 ) {
 
-  const {
-    method = "GET",
-    body = undefined,
-    auth = true,
-    headers = {}
-  } = options;
+  state.activePage =
+    page;
 
-  const requestHeaders = {
-    Accept:
-      "application/json",
+  const vault =
+    page === "vault";
 
-    ...headers
-  };
+  vaultPage?.classList.toggle(
+    "active",
+    vault
+  );
 
-  if (
-    body !== undefined &&
-    !(body instanceof FormData)
-  ) {
+  downloaderPage?.classList.toggle(
+    "active",
+    !vault
+  );
 
-    requestHeaders[
-      "Content-Type"
-    ] =
-      "application/json";
+  $("#navVault")?.classList.toggle(
+    "active",
+    vault
+  );
 
-  }
+  $("#navDownloader")?.classList.toggle(
+    "active",
+    !vault
+  );
 
-  if (
-    auth &&
-    state.token
-  ) {
-
-    requestHeaders.Authorization =
-      `Bearer ${state.token}`;
-
-  }
-
-  const url =
-    buildApiUrl(path);
-
-  let response;
-
-  try {
-
-    response =
-      await fetch(
-        url,
-        {
-          method,
-          headers: requestHeaders,
-          body:
-            body instanceof FormData
-              ? body
-              : body !== undefined
-                ? JSON.stringify(body)
-                : undefined,
-
-          credentials: "omit",
-
-          cache: "no-store"
-        }
-      );
-
-  } catch {
-
-    throw new Error(
-      "Tidak dapat terhubung ke server BRANKAS."
-    );
-
-  }
-
-  let data = null;
-
-  const contentType =
-    response.headers.get(
-      "content-type"
-    ) || "";
-
-  if (
-    contentType.includes(
-      "application/json"
-    )
-  ) {
-
-    try {
-
-      data =
-        await response.json();
-
-    } catch {
-
-      data = null;
-
-    }
-
-  } else {
-
-    try {
-
-      const text =
-        await response.text();
-
-      data =
-        text
-          ? { message: text }
-          : null;
-
-    } catch {
-
-      data = null;
-
-    }
-
-  }
-
-  if (!response.ok) {
-
-    if (
-      response.status === 401 ||
-      response.status === 403
-    ) {
-
-      clearSession();
-
-    }
-
-    throw new Error(
-      data?.message ||
-      `Request gagal (${response.status}).`
-    );
-
-  }
-
-  return data || {};
 }
 
 
 /* ============================================================
-   API URL
+   DOWNLOADER SOURCE
    ============================================================ */
 
-function buildApiUrl(
-  path
+function switchDownloader(
+  source
 ) {
 
-  const base =
-    String(
-      CONFIG.API_BASE || ""
-    ).replace(
-      /\/+$/,
-      ""
-    );
+  state.activeSource =
+    source;
 
-  const cleanPath =
-    String(path).startsWith("/")
-      ? path
-      : `/${path}`;
+  const vid3y =
+    source === "vid3y";
 
-  return `${base}${cleanPath}`;
+  $("#vid3yTab")?.classList.toggle(
+    "active",
+    vid3y
+  );
+
+  $("#tiktokTab")?.classList.toggle(
+    "active",
+    !vid3y
+  );
+
+  $("#vid3yPanel")?.classList.toggle(
+    "active",
+    vid3y
+  );
+
+  $("#tiktokPanel")?.classList.toggle(
+    "active",
+    !vid3y
+  );
 
 }
 
@@ -1016,43 +730,53 @@ function buildApiUrl(
 
 async function loadFiles() {
 
-  if (!state.token) {
+  if (
+    !hasValidSession()
+  ) {
+
+    showAuth();
+
     return;
+
   }
 
   try {
 
-    const result =
+    const data =
       await apiRequest(
         "/api/files",
         {
-          method: "GET"
+          method:
+            "GET"
         }
       );
 
     state.files =
-      Array.isArray(result.files)
-        ? result.files
+      Array.isArray(
+        data.files
+      )
+        ? data.files
         : [];
 
     renderFiles();
 
-    updateConnectionStatus(
-      true
-    );
-
   } catch (error) {
 
-    if (!state.token) {
+    if (
+      error.status === 401
+    ) {
 
-      showLogin();
+      clearSession();
+
+      showAuth();
 
       return;
 
     }
 
     showToast(
-      error.message
+      error.message,
+      "error"
     );
 
   }
@@ -1061,7 +785,7 @@ async function loadFiles() {
 
 
 /* ============================================================
-   FILE RENDERING
+   RENDER FILES
    ============================================================ */
 
 function renderFiles() {
@@ -1070,69 +794,49 @@ function renderFiles() {
     return;
   }
 
-  fileGrid.innerHTML = "";
+  fileGrid.innerHTML =
+    "";
 
-  const files =
-    [...state.files].sort(
-      (a, b) =>
-        new Date(
-          b.createdAt || 0
-        ) -
-        new Date(
-          a.createdAt || 0
-        )
-    );
+  if (fileCount) {
 
-  fileCount.textContent =
-    `${files.length} file${
-      files.length === 1
-        ? ""
-        : "s"
-    }`;
+    fileCount.textContent =
+      `${state.files.length} file`;
 
-  if (!files.length) {
+  }
 
-    emptyState.classList.remove(
-      "hidden"
-    );
+  if (
+    state.files.length === 0
+  ) {
 
-    fileGrid.classList.add(
+    emptyState?.classList.remove(
       "hidden"
     );
 
     return;
+
   }
 
-  emptyState.classList.add(
+  emptyState?.classList.add(
     "hidden"
   );
 
-  fileGrid.classList.remove(
-    "hidden"
-  );
+  for (
+    const file of state.files
+  ) {
 
-  const fragment =
-    document.createDocumentFragment();
+    fileGrid.appendChild(
+      createFileCard(
+        file
+      )
+    );
 
-  files.forEach(
-    (file) => {
-
-      fragment.appendChild(
-        createFileCard(file)
-      );
-
-    }
-  );
-
-  fileGrid.appendChild(
-    fragment
-  );
+  }
 
 }
 
 
 /* ============================================================
-   CREATE FILE CARD
+   FILE CARD
    ============================================================ */
 
 function createFileCard(
@@ -1147,227 +851,35 @@ function createFileCard(
   card.className =
     "file-card";
 
-  const preview =
+  const media =
+    createFilePreview(
+      file
+    );
+
+  const body =
     document.createElement(
       "div"
     );
 
-  preview.className =
-    "file-preview";
+  body.className =
+    "file-card-body";
 
-  const typeBadge =
-    document.createElement(
-      "span"
-    );
-
-  typeBadge.className =
-    "file-type-badge";
-
-  typeBadge.textContent =
-    getFileTypeLabel(file);
-
-  preview.appendChild(
-    typeBadge
-  );
-
-
-  /* -------------------------
-     IMAGE
-     ------------------------- */
-
-  if (
-    isImageFile(file)
-  ) {
-
-    const img =
-      document.createElement(
-        "img"
-      );
-
-    img.loading =
-      "lazy";
-
-    img.alt =
-      file.name || "Image";
-
-    img.src =
-      getPreviewUrl(file);
-
-    img.addEventListener(
-      "error",
-      () => {
-
-        preview.innerHTML =
-          "";
-
-        preview.appendChild(
-          typeBadge
-        );
-
-        preview.appendChild(
-          createFileIcon(
-            getFileTypeLabel(file)
-          )
-        );
-
-      }
-    );
-
-    preview.appendChild(
-      img
-    );
-
-  }
-
-
-  /* -------------------------
-     VIDEO
-     ------------------------- */
-
-  else if (
-    isVideoFile(file)
-  ) {
-
-    const video =
-      document.createElement(
-        "video"
-      );
-
-    video.muted =
-      true;
-
-    video.playsInline =
-      true;
-
-    video.preload =
-      "metadata";
-
-    video.src =
-      getPreviewUrl(file);
-
-    video.addEventListener(
-      "error",
-      () => {
-
-        video.remove();
-
-        preview.appendChild(
-          createFileIcon(
-            "VIDEO"
-          )
-        );
-
-      }
-    );
-
-    preview.appendChild(
-      video
-    );
-
-  }
-
-
-  /* -------------------------
-     AUDIO
-     ------------------------- */
-
-  else if (
-    isAudioFile(file)
-  ) {
-
-    const audio =
-      document.createElement(
-        "audio"
-      );
-
-    audio.controls =
-      true;
-
-    audio.preload =
-      "metadata";
-
-    audio.src =
-      getPreviewUrl(file);
-
-    preview.appendChild(
-      audio
-    );
-
-  }
-
-
-  /* -------------------------
-     OTHER
-     ------------------------- */
-
-  else {
-
-    preview.appendChild(
-      createFileIcon(
-        getFileTypeLabel(file)
-      )
-    );
-
-  }
-
-
-  const details =
-    document.createElement(
-      "div"
-    );
-
-  details.className =
-    "file-details";
-
-
-  const name =
+  const title =
     document.createElement(
       "h3"
     );
 
-  name.className =
-    "file-name";
-
-  name.title =
-    file.name || "Unnamed file";
-
-  name.textContent =
-    file.name || "Unnamed file";
-
+  title.textContent =
+    file.name ||
+    "Unnamed file";
 
   const meta =
     document.createElement(
-      "div"
+      "p"
     );
 
-  meta.className =
-    "file-meta";
-
-  const size =
-    document.createElement(
-      "span"
-    );
-
-  size.textContent =
-    formatBytes(
-      Number(file.size) || 0
-    );
-
-  const date =
-    document.createElement(
-      "span"
-    );
-
-  date.textContent =
-    formatDate(
-      file.createdAt
-    );
-
-  meta.append(
-    size,
-    date
-  );
-
+  meta.textContent =
+    `${formatBytes(file.size)} • ${formatDate(file.createdAt)}`;
 
   const actions =
     document.createElement(
@@ -1376,7 +888,6 @@ function createFileCard(
 
   actions.className =
     "file-actions";
-
 
   const openButton =
     document.createElement(
@@ -1387,16 +898,16 @@ function createFileCard(
     "button";
 
   openButton.className =
-    "file-action";
+    "btn btn-primary";
 
   openButton.textContent =
     "Buka";
 
   openButton.addEventListener(
     "click",
-    () => openViewer(file)
+    () =>
+      openViewer(file)
   );
-
 
   const downloadButton =
     document.createElement(
@@ -1407,16 +918,16 @@ function createFileCard(
     "button";
 
   downloadButton.className =
-    "file-action";
+    "btn btn-secondary";
 
   downloadButton.textContent =
     "Download";
 
   downloadButton.addEventListener(
     "click",
-    () => downloadFile(file)
+    () =>
+      downloadFile(file)
   );
-
 
   const deleteButton =
     document.createElement(
@@ -1427,16 +938,16 @@ function createFileCard(
     "button";
 
   deleteButton.className =
-    "file-action danger";
+    "btn btn-danger";
 
   deleteButton.textContent =
     "Hapus";
 
   deleteButton.addEventListener(
     "click",
-    () => deleteFile(file)
+    () =>
+      deleteFile(file)
   );
-
 
   actions.append(
     openButton,
@@ -1444,17 +955,15 @@ function createFileCard(
     deleteButton
   );
 
-
-  details.append(
-    name,
+  body.append(
+    title,
     meta,
     actions
   );
 
-
   card.append(
-    preview,
-    details
+    media,
+    body
   );
 
   return card;
@@ -1463,12 +972,87 @@ function createFileCard(
 
 
 /* ============================================================
-   FILE ICON
+   PREVIEW THUMBNAIL
    ============================================================ */
 
-function createFileIcon(
-  label
+function createFilePreview(
+  file
 ) {
+
+  const wrapper =
+    document.createElement(
+      "div"
+    );
+
+  wrapper.className =
+    "file-preview";
+
+  const url =
+    getPreviewUrl(
+      file.id
+    );
+
+  const mime =
+    String(
+      file.mimeType || ""
+    )
+      .toLowerCase();
+
+  if (
+    mime.startsWith(
+      "image/"
+    )
+  ) {
+
+    const image =
+      document.createElement(
+        "img"
+      );
+
+    image.src =
+      url;
+
+    image.alt =
+      file.name || "Image";
+
+    image.loading =
+      "lazy";
+
+    wrapper.appendChild(
+      image
+    );
+
+    return wrapper;
+
+  }
+
+  if (
+    mime.startsWith(
+      "video/"
+    )
+  ) {
+
+    const video =
+      document.createElement(
+        "video"
+      );
+
+    video.src =
+      url;
+
+    video.preload =
+      "metadata";
+
+    video.muted =
+      true;
+
+    wrapper.appendChild(
+      video
+    );
+
+    return wrapper;
+
+  }
 
   const icon =
     document.createElement(
@@ -1476,212 +1060,193 @@ function createFileIcon(
     );
 
   icon.className =
-    "file-icon";
+    "file-type-icon";
 
   icon.textContent =
-    String(label || "FILE")
-      .slice(0, 8);
+    getFileIcon(
+      mime
+    );
 
-  return icon;
+  wrapper.appendChild(
+    icon
+  );
+
+  return wrapper;
 
 }
 
 
 /* ============================================================
-   FILE TYPE
+   VIEWER
    ============================================================ */
 
-function getFileTypeLabel(
+function openViewer(
   file
 ) {
+
+  state.viewerFile =
+    file;
+
+  if (viewerTitle) {
+
+    viewerTitle.textContent =
+      file.name ||
+      "Preview";
+
+  }
+
+  if (!viewerContent) {
+    return;
+  }
+
+  viewerContent.innerHTML =
+    "";
+
+  const url =
+    getPreviewUrl(
+      file.id
+    );
 
   const mime =
     String(
-      file?.mimeType ||
-      file?.type ||
-      ""
-    ).toLowerCase();
-
-  const name =
-    String(
-      file?.name ||
-      ""
-    ).toLowerCase();
+      file.mimeType || ""
+    )
+      .toLowerCase();
 
   if (
-    mime.startsWith("video/")
-  ) {
-    return "VIDEO";
-  }
-
-  if (
-    mime.startsWith("image/")
-  ) {
-    return "IMAGE";
-  }
-
-  if (
-    mime.startsWith("audio/")
-  ) {
-    return "AUDIO";
-  }
-
-  if (
-    mime === "application/pdf" ||
-    name.endsWith(".pdf")
-  ) {
-    return "PDF";
-  }
-
-  if (
-    mime.includes("zip") ||
-    name.endsWith(".zip")
-  ) {
-    return "ZIP";
-  }
-
-  if (
-    name.endsWith(".rar")
-  ) {
-    return "RAR";
-  }
-
-  if (
-    name.endsWith(".7z")
-  ) {
-    return "7Z";
-  }
-
-  if (
-    mime.includes("text") ||
-    name.endsWith(".txt")
-  ) {
-    return "TEXT";
-  }
-
-  return "FILE";
-
-}
-
-
-/* ============================================================
-   MIME HELPERS
-   ============================================================ */
-
-function getMime(
-  file
-) {
-
-  return String(
-    file?.mimeType ||
-    file?.type ||
-    ""
-  ).toLowerCase();
-
-}
-
-
-function isImageFile(
-  file
-) {
-
-  return getMime(
-    file
-  ).startsWith(
-    "image/"
-  );
-
-}
-
-
-function isVideoFile(
-  file
-) {
-
-  return getMime(
-    file
-  ).startsWith(
-    "video/"
-  );
-
-}
-
-
-function isAudioFile(
-  file
-) {
-
-  return getMime(
-    file
-  ).startsWith(
-    "audio/"
-  );
-
-}
-
-
-/* ============================================================
-   PREVIEW URL
-   ============================================================ */
-
-function getPreviewUrl(
-  file
-) {
-
-  if (
-    file?.previewUrl
+    mime.startsWith(
+      "video/"
+    )
   ) {
 
-    return file.previewUrl;
+    const video =
+      document.createElement(
+        "video"
+      );
 
-  }
+    video.controls =
+      true;
 
-  if (
-    file?.id
+    video.autoplay =
+      false;
+
+    video.playsInline =
+      true;
+
+    video.src =
+      url;
+
+    viewerContent.appendChild(
+      video
+    );
+
+  } else if (
+    mime.startsWith(
+      "audio/"
+    )
   ) {
 
-    return buildApiUrl(
-      `/api/files/${encodeURIComponent(
-        file.id
-      )}`
+    const audio =
+      document.createElement(
+        "audio"
+      );
+
+    audio.controls =
+      true;
+
+    audio.src =
+      url;
+
+    viewerContent.appendChild(
+      audio
+    );
+
+  } else if (
+    mime.startsWith(
+      "image/"
+    )
+  ) {
+
+    const image =
+      document.createElement(
+        "img"
+      );
+
+    image.src =
+      url;
+
+    image.alt =
+      file.name || "Image";
+
+    viewerContent.appendChild(
+      image
+    );
+
+  } else if (
+    mime ===
+    "application/pdf"
+  ) {
+
+    const frame =
+      document.createElement(
+        "iframe"
+      );
+
+    frame.src =
+      url;
+
+    frame.title =
+      file.name ||
+      "PDF";
+
+    viewerContent.appendChild(
+      frame
+    );
+
+  } else {
+
+    const message =
+      document.createElement(
+        "div"
+      );
+
+    message.className =
+      "viewer-message";
+
+    message.innerHTML =
+      `
+        <strong>Preview belum tersedia untuk tipe file ini.</strong>
+        <p>Gunakan tombol Download untuk membuka file.</p>
+      `;
+
+    viewerContent.appendChild(
+      message
     );
 
   }
 
-  return "";
+  viewerModal?.classList.add(
+    "open"
+  );
 
 }
 
 
-/* ============================================================
-   DOWNLOAD URL
-   ============================================================ */
+function closeViewer() {
 
-function getDownloadUrl(
-  file
-) {
+  viewerModal?.classList.remove(
+    "open"
+  );
 
-  if (
-    file?.downloadUrl
-  ) {
+  if (viewerContent) {
 
-    return file.downloadUrl;
+    viewerContent.innerHTML =
+      "";
 
   }
 
-  if (
-    file?.id
-  ) {
-
-    return buildApiUrl(
-      `/api/files/${encodeURIComponent(
-        file.id
-      )}/download`
-    );
-
-  }
-
-  return "";
+  state.viewerFile =
+    null;
 
 }
 
@@ -1690,74 +1255,43 @@ function getDownloadUrl(
    UPLOAD
    ============================================================ */
 
-async function handleFileSelection(
+async function handleFileUpload(
   event
 ) {
 
-  const files =
-    Array.from(
-      event.target.files || []
-    );
+  const file =
+    event.target.files?.[0];
 
   event.target.value =
     "";
 
-  if (!files.length) {
+  if (!file) {
     return;
   }
 
-  await uploadFiles(
-    files
-  );
-
-}
-
-
-async function uploadFiles(
-  files
-) {
-
-  if (!state.token) {
-
-    showLogin();
-
-    return;
-
-  }
-
-  if (state.busy) {
+  if (
+    file.size >
+    CONFIG.MAX_FILE_SIZE
+  ) {
 
     showToast(
-      "Tunggu proses sebelumnya selesai."
+      "Ukuran file melebihi 5 GB.",
+      "error"
     );
 
     return;
 
   }
 
-  const oversized =
-    files.find(
-      (file) =>
-        file.size >
-        CONFIG.MAX_FILE_SIZE
-    );
+  if (
+    !hasValidSession()
+  ) {
 
-  if (oversized) {
-
-    showToast(
-      `File "${oversized.name}" melebihi batas 5GB.`
-    );
+    showAuth();
 
     return;
 
   }
-
-  state.busy =
-    true;
-
-  uploadArea.classList.remove(
-    "hidden"
-  );
 
   setUploadProgress(
     0,
@@ -1766,123 +1300,60 @@ async function uploadFiles(
 
   try {
 
-    for (
-      let index = 0;
-      index < files.length;
-      index++
-    ) {
+    await uploadFile(
+      file
+    );
 
-      const file =
-        files[index];
-
-      setUploadProgress(
-        Math.round(
-          (index /
-            files.length) *
-            100
-        ),
-        `Menyiapkan ${file.name}...`
-      );
-
-      await uploadSingleFile(
-        file
-      );
-
-      setUploadProgress(
-        Math.round(
-          ((index + 1) /
-            files.length) *
-            100
-        ),
-        `${file.name} selesai.`
-      );
-
-    }
-
-    await loadFiles();
+    setUploadProgress(
+      100,
+      "Upload selesai."
+    );
 
     showToast(
-      `${files.length} file berhasil disimpan.`
+      "File berhasil disimpan.",
+      "success"
     );
+
+    await loadFiles();
 
   } catch (error) {
 
     showToast(
-      error.message
+      error.message,
+      "error"
     );
 
-  } finally {
-
-    setTimeout(
-      () => {
-
-        uploadArea.classList.add(
-          "hidden"
-        );
-
-      },
-      700
+    setUploadProgress(
+      0,
+      ""
     );
-
-    state.busy =
-      false;
 
   }
 
 }
 
 
-/* ============================================================
-   SINGLE FILE UPLOAD
-   ============================================================ */
-
-async function uploadSingleFile(
+function uploadFile(
   file
 ) {
 
-  /*
-    Backend dapat menggunakan:
-    1. multipart upload endpoint, atau
-    2. presigned upload URL.
-
-    Frontend mencoba endpoint /api/files.
-  */
-
-  const formData =
-    new FormData();
-
-  formData.append(
-    "file",
-    file,
-    file.name
-  );
-
-  await uploadWithProgress(
-    "/api/files",
-    formData
-  );
-
-}
-
-
-/* ============================================================
-   UPLOAD WITH PROGRESS
-   ============================================================ */
-
-function uploadWithProgress(
-  path,
-  formData
-) {
-
   return new Promise(
-    (resolve, reject) => {
+    (
+      resolve,
+      reject
+    ) => {
 
       const xhr =
         new XMLHttpRequest();
 
+      const url =
+        apiUrl(
+          "/api/files"
+        );
+
       xhr.open(
         "POST",
-        buildApiUrl(path),
+        url,
         true
       );
 
@@ -1891,33 +1362,30 @@ function uploadWithProgress(
         `Bearer ${state.token}`
       );
 
-      xhr.setRequestHeader(
-        "Cache-Control",
-        "no-store"
-      );
-
       xhr.upload.addEventListener(
         "progress",
         (event) => {
 
-          if (!event.lengthComputable) {
+          if (
+            !event.lengthComputable
+          ) {
+
             return;
+
           }
 
           const percent =
             Math.round(
-              (event.loaded /
-                event.total) *
-                100
+              (
+                event.loaded /
+                event.total
+              ) *
+              100
             );
 
           setUploadProgress(
             percent,
-            `Mengupload... ${formatBytes(
-              event.loaded
-            )} / ${formatBytes(
-              event.total
-            )}`
+            `Mengupload ${percent}%`
           );
 
         }
@@ -1927,47 +1395,37 @@ function uploadWithProgress(
         "load",
         () => {
 
-          let data = {};
-
-          try {
-
-            data =
-              xhr.responseText
-                ? JSON.parse(
-                    xhr.responseText
-                  )
-                : {};
-
-          } catch {
-
-            data = {};
-
-          }
-
           if (
             xhr.status >= 200 &&
             xhr.status < 300
           ) {
 
-            resolve(data);
+            resolve(
+              parseJson(
+                xhr.responseText
+              )
+            );
 
             return;
 
           }
 
           if (
-            xhr.status === 401 ||
-            xhr.status === 403
+            xhr.status === 401
           ) {
 
             clearSession();
+
+            showAuth();
 
           }
 
           reject(
             new Error(
-              data?.message ||
-              `Upload gagal (${xhr.status}).`
+              extractErrorMessage(
+                xhr.responseText,
+                `Upload gagal (${xhr.status}).`
+              )
             )
           );
 
@@ -1980,7 +1438,7 @@ function uploadWithProgress(
 
           reject(
             new Error(
-              "Upload gagal karena koneksi."
+              "Koneksi upload gagal."
             )
           );
 
@@ -2000,6 +1458,15 @@ function uploadWithProgress(
         }
       );
 
+      const formData =
+        new FormData();
+
+      formData.append(
+        "file",
+        file,
+        file.name
+      );
+
       xhr.send(
         formData
       );
@@ -2010,261 +1477,19 @@ function uploadWithProgress(
 }
 
 
-function setUploadProgress(
-  percent,
-  text
-) {
-
-  const safePercent =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        Number(percent) || 0
-      )
-    );
-
-  uploadProgressBar.style.width =
-    `${safePercent}%`;
-
-  uploadProgressText.textContent =
-    `${safePercent}%`;
-
-  uploadStatusText.textContent =
-    text || "";
-
-}
-
-
 /* ============================================================
-   OPEN FILE
-   ============================================================ */
-
-async function openViewer(
-  file
-) {
-
-  state.viewerFile =
-    file;
-
-  viewerTitle.textContent =
-    file.name || "Preview";
-
-  viewerContent.innerHTML =
-    "";
-
-  const mime =
-    getMime(file);
-
-  if (
-    isImageFile(file)
-  ) {
-
-    const img =
-      document.createElement(
-        "img"
-      );
-
-    img.alt =
-      file.name || "Image";
-
-    img.src =
-      getPreviewUrl(file);
-
-    viewerContent.appendChild(
-      img
-    );
-
-  }
-
-  else if (
-    isVideoFile(file)
-  ) {
-
-    const video =
-      document.createElement(
-        "video"
-      );
-
-    video.controls =
-      true;
-
-    video.autoplay =
-      false;
-
-    video.playsInline =
-      true;
-
-    video.preload =
-      "metadata";
-
-    video.src =
-      getPreviewUrl(file);
-
-    viewerContent.appendChild(
-      video
-    );
-
-  }
-
-  else if (
-    isAudioFile(file)
-  ) {
-
-    const audio =
-      document.createElement(
-        "audio"
-      );
-
-    audio.controls =
-      true;
-
-    audio.preload =
-      "metadata";
-
-    audio.src =
-      getPreviewUrl(file);
-
-    viewerContent.appendChild(
-      audio
-    );
-
-  }
-
-  else if (
-    mime ===
-      "application/pdf" ||
-    String(file.name || "")
-      .toLowerCase()
-      .endsWith(".pdf")
-  ) {
-
-    const iframe =
-      document.createElement(
-        "iframe"
-      );
-
-    iframe.title =
-      file.name || "PDF";
-
-    iframe.src =
-      getPreviewUrl(file);
-
-    viewerContent.appendChild(
-      iframe
-    );
-
-  }
-
-  else {
-
-    const message =
-      document.createElement(
-        "div"
-      );
-
-    message.className =
-      "viewer-file-message";
-
-    const strong =
-      document.createElement(
-        "strong"
-      );
-
-    strong.textContent =
-      "Preview tidak tersedia";
-
-    const span =
-      document.createElement(
-        "span"
-      );
-
-    span.textContent =
-      "Jenis file ini tidak dapat ditampilkan langsung di browser. Gunakan tombol Download untuk menyimpan file ke perangkat.";
-
-    message.append(
-      strong,
-      span
-    );
-
-    viewerContent.appendChild(
-      message
-    );
-
-  }
-
-  viewerModal.classList.remove(
-    "hidden"
-  );
-
-  viewerModal.setAttribute(
-    "aria-hidden",
-    "false"
-  );
-
-  document.body.style.overflow =
-    "hidden";
-
-}
-
-
-/* ============================================================
-   CLOSE VIEWER
-   ============================================================ */
-
-function closeViewer() {
-
-  viewerModal.classList.add(
-    "hidden"
-  );
-
-  viewerModal.setAttribute(
-    "aria-hidden",
-    "true"
-  );
-
-  viewerContent.innerHTML =
-    "";
-
-  state.viewerFile =
-    null;
-
-  document.body.style.overflow =
-    "";
-
-}
-
-
-/* ============================================================
-   VIEWER DOWNLOAD
-   ============================================================ */
-
-async function handleViewerDownload() {
-
-  if (
-    !state.viewerFile
-  ) {
-    return;
-  }
-
-  await downloadFile(
-    state.viewerFile
-  );
-
-}
-
-
-/* ============================================================
-   DOWNLOAD FILE
+   DOWNLOAD
    ============================================================ */
 
 async function downloadFile(
   file
 ) {
 
-  if (!state.token) {
+  if (
+    !hasValidSession()
+  ) {
 
-    showLogin();
+    showAuth();
 
     return;
 
@@ -2272,51 +1497,66 @@ async function downloadFile(
 
   try {
 
-    const url =
-      getDownloadUrl(file);
-
-    if (!url) {
-
-      throw new Error(
-        "URL download tidak tersedia."
-      );
-
-    }
-
     /*
-      Backend dapat memberikan presigned URL.
-      Jika URL berasal dari backend sendiri,
-      kita tambahkan Authorization.
+      Backend tetap memeriksa Bearer token.
+
+      Karena browser tidak dapat mengirim Authorization
+      melalui window.location, kita meminta response
+      sebagai blob lalu membuat link download.
+
+      Catatan:
+      Untuk file multi-GB, versi production berikutnya
+      sebaiknya memakai short-lived signed URL agar
+      browser tidak menampung seluruh file sebagai Blob.
     */
+
+    showToast(
+      "Menyiapkan download...",
+      "success"
+    );
 
     const response =
       await fetch(
-        url,
+        apiUrl(
+          `/api/files/${encodeURIComponent(
+            file.id
+          )}/download`
+        ),
         {
-          method: "GET",
+          method:
+            "GET",
 
           headers: {
             Authorization:
               `Bearer ${state.token}`
-          },
-
-          cache: "no-store"
+          }
         }
       );
 
-    if (!response.ok) {
+    if (
+      response.status === 401
+    ) {
 
-      if (
-        response.status === 401 ||
-        response.status === 403
-      ) {
+      clearSession();
 
-        clearSession();
+      showAuth();
 
-      }
+      return;
+
+    }
+
+    if (
+      !response.ok
+    ) {
+
+      const text =
+        await response.text();
 
       throw new Error(
-        `Download gagal (${response.status}).`
+        extractErrorMessage(
+          text,
+          "Download gagal."
+        )
       );
 
     }
@@ -2324,7 +1564,7 @@ async function downloadFile(
     const blob =
       await response.blob();
 
-    const blobUrl =
+    const objectUrl =
       URL.createObjectURL(
         blob
       );
@@ -2335,7 +1575,7 @@ async function downloadFile(
       );
 
     anchor.href =
-      blobUrl;
+      objectUrl;
 
     anchor.download =
       file.name ||
@@ -2350,22 +1590,18 @@ async function downloadFile(
     anchor.remove();
 
     setTimeout(
-      () => {
+      () =>
         URL.revokeObjectURL(
-          blobUrl
-        );
-      },
-      1000
-    );
-
-    showToast(
-      "Download dimulai."
+          objectUrl
+        ),
+      60_000
     );
 
   } catch (error) {
 
     showToast(
-      error.message
+      error.message,
+      "error"
     );
 
   }
@@ -2374,30 +1610,24 @@ async function downloadFile(
 
 
 /* ============================================================
-   DELETE FILE
+   DELETE
    ============================================================ */
 
 async function deleteFile(
   file
 ) {
 
-  if (!file?.id) {
-
-    showToast(
-      "ID file tidak tersedia."
-    );
-
-    return;
-
-  }
-
   const confirmed =
     window.confirm(
-      `Hapus "${file.name}" dari BRANKAS?\n\nFile akan dihapus dari vault.`
+      `Hapus "${file.name}" dari BRANKAS?`
     );
 
-  if (!confirmed) {
+  if (
+    !confirmed
+  ) {
+
     return;
+
   }
 
   try {
@@ -2407,207 +1637,23 @@ async function deleteFile(
         file.id
       )}`,
       {
-        method: "DELETE"
+        method:
+          "DELETE"
       }
     );
 
-    state.files =
-      state.files.filter(
-        (item) =>
-          String(item.id) !==
-          String(file.id)
-      );
-
-    renderFiles();
-
-    closeViewer();
-
     showToast(
-      "File berhasil dihapus."
-    );
-
-  } catch (error) {
-
-    showToast(
-      error.message
-    );
-
-  }
-
-}
-
-
-/* ============================================================
-   PAGE SWITCHING
-   ============================================================ */
-
-function switchPage(
-  page
-) {
-
-  const validPages = [
-    "vault",
-    "downloader"
-  ];
-
-  if (
-    !validPages.includes(page)
-  ) {
-
-    page = "vault";
-
-  }
-
-  state.activePage =
-    page;
-
-  navButtons.forEach(
-    (button) => {
-
-      button.classList.toggle(
-        "active",
-        button.dataset.page ===
-          page
-      );
-
-    }
-  );
-
-  pages.forEach(
-    (section) => {
-
-      const isActive =
-        section.id ===
-        `${page}Page`;
-
-      section.classList.toggle(
-        "active",
-        isActive
-      );
-
-    }
-  );
-
-}
-
-
-/* ============================================================
-   DOWNLOADER SOURCE
-   ============================================================ */
-
-function switchDownloaderSource(
-  source
-) {
-
-  const validSources = [
-    "vid3y",
-    "tiktok"
-  ];
-
-  if (
-    !validSources.includes(
-      source
-    )
-  ) {
-
-    source = "vid3y";
-
-  }
-
-  state.activeSource =
-    source;
-
-  sourceTabs.forEach(
-    (button) => {
-
-      button.classList.toggle(
-        "active",
-        button.dataset.source ===
-          source
-      );
-
-    }
-  );
-
-  sourcePanels.forEach(
-    (panel) => {
-
-      panel.classList.toggle(
-        "active",
-        panel.id ===
-          `${source}Source`
-      );
-
-    }
-  );
-
-  clearDownloaderMessage();
-
-}
-
-
-/* ============================================================
-   VID3Y IMPORT
-   ============================================================ */
-
-async function handleVid3yImport() {
-
-  const url =
-    vid3yUrl.value.trim();
-
-  clearDownloaderMessage();
-
-  if (!isValidHttpUrl(url)) {
-
-    showDownloaderMessage(
-      "Masukkan URL Vid3y yang valid."
-    );
-
-    return;
-
-  }
-
-  setButtonBusy(
-    vid3yDownloadButton,
-    true,
-    "Memproses..."
-  );
-
-  try {
-
-    const result =
-      await apiRequest(
-        "/api/import/vid3y",
-        {
-          method: "POST",
-          body: {
-            url
-          }
-        }
-      );
-
-    vid3yUrl.value =
-      "";
-
-    showDownloaderMessage(
-      result.message ||
-      "Media berhasil disimpan ke BRANKAS.",
-      true
+      "File berhasil dihapus.",
+      "success"
     );
 
     await loadFiles();
 
   } catch (error) {
 
-    showDownloaderMessage(
-      error.message
-    );
-
-  } finally {
-
-    setButtonBusy(
-      vid3yDownloadButton,
-      false
+    showToast(
+      error.message,
+      "error"
     );
 
   }
@@ -2616,79 +1662,154 @@ async function handleVid3yImport() {
 
 
 /* ============================================================
-   TIKTOK IMPORT
+   VID3Y
    ============================================================ */
 
-async function handleTikTokImport() {
+async function handleVid3y(
+  event
+) {
+
+  event.preventDefault();
+
+  const input =
+    $("#vid3yUrl");
 
   const url =
-    tiktokUrl.value.trim();
+    input?.value.trim() ||
+    "";
 
-  clearDownloaderMessage();
+  if (
+    !isHttpUrl(url)
+  ) {
 
-  if (!isValidHttpUrl(url)) {
-
-    showDownloaderMessage(
-      "Masukkan URL TikTok yang valid."
+    showToast(
+      "Masukkan URL Vid3y yang valid.",
+      "error"
     );
 
     return;
 
   }
+
+  setBusy(
+    true,
+    event.currentTarget
+  );
+
+  try {
+
+    await apiRequest(
+      "/api/import/vid3y",
+      {
+        method:
+          "POST",
+
+        body: {
+          url
+        }
+      }
+    );
+
+    input.value =
+      "";
+
+    showToast(
+      "Media berhasil masuk ke BRANKAS.",
+      "success"
+    );
+
+    await loadFiles();
+
+  } catch (error) {
+
+    showToast(
+      error.message,
+      "error"
+    );
+
+  } finally {
+
+    setBusy(
+      false,
+      event.currentTarget
+    );
+
+  }
+
+}
+
+
+/* ============================================================
+   TIKTOK
+   ============================================================ */
+
+async function handleTikTok(
+  event
+) {
+
+  event.preventDefault();
+
+  const input =
+    $("#tiktokUrl");
+
+  const url =
+    input?.value.trim() ||
+    "";
 
   if (
     !isTikTokUrl(url)
   ) {
 
-    showDownloaderMessage(
-      "URL tersebut bukan URL TikTok yang dikenali."
+    showToast(
+      "Masukkan URL TikTok yang valid.",
+      "error"
     );
 
     return;
 
   }
 
-  setButtonBusy(
-    tiktokDownloadButton,
+  setBusy(
     true,
-    "Memproses..."
+    event.currentTarget
   );
 
   try {
 
-    const result =
-      await apiRequest(
-        "/api/import/tiktok",
-        {
-          method: "POST",
-          body: {
-            url
-          }
-        }
-      );
+    await apiRequest(
+      "/api/import/tiktok",
+      {
+        method:
+          "POST",
 
-    tiktokUrl.value =
+        body: {
+          url
+        }
+      }
+    );
+
+    input.value =
       "";
 
-    showDownloaderMessage(
-      result.message ||
-      "Media berhasil disimpan ke BRANKAS.",
-      true
+    showToast(
+      "Video berhasil masuk ke BRANKAS.",
+      "success"
     );
 
     await loadFiles();
 
   } catch (error) {
 
-    showDownloaderMessage(
-      error.message
+    showToast(
+      error.message,
+      "error"
     );
 
   } finally {
 
-    setButtonBusy(
-      tiktokDownloadButton,
-      false
+    setBusy(
+      false,
+      event.currentTarget
     );
 
   }
@@ -2697,63 +1818,201 @@ async function handleTikTokImport() {
 
 
 /* ============================================================
-   DOWNLOADER MESSAGES
+   GENERIC API
    ============================================================ */
 
-function showDownloaderMessage(
-  message,
-  success = false
+async function apiRequest(
+  path,
+  options = {}
 ) {
 
-  if (!downloaderMessage) {
-    return;
+  const {
+    method =
+      "GET",
+
+    body,
+
+    auth =
+      true
+  } =
+    options;
+
+  const headers = {
+    Accept:
+      "application/json"
+  };
+
+  if (
+    body !== undefined
+  ) {
+
+    headers[
+      "Content-Type"
+    ] =
+      "application/json";
+
   }
 
-  downloaderMessage.textContent =
-    String(message || "");
+  if (
+    auth &&
+    state.token
+  ) {
 
-  downloaderMessage.classList.toggle(
-    "success",
-    success
-  );
+    headers.Authorization =
+      `Bearer ${state.token}`;
+
+  }
+
+  const response =
+    await fetch(
+      apiUrl(path),
+      {
+        method,
+
+        headers,
+
+        body:
+          body !== undefined
+            ? JSON.stringify(
+                body
+              )
+            : undefined
+      }
+    );
+
+  const text =
+    await response.text();
+
+  const data =
+    parseJson(
+      text
+    );
+
+  if (
+    !response.ok
+  ) {
+
+    const error =
+      new Error(
+        data?.message ||
+        `Request gagal (${response.status}).`
+      );
+
+    error.status =
+      response.status;
+
+    throw error;
+
+  }
+
+  return data;
 
 }
 
 
-function clearDownloaderMessage() {
+/* ============================================================
+   API URL
+   ============================================================ */
 
-  if (!downloaderMessage) {
-    return;
+function apiUrl(
+  path
+) {
+
+  const base =
+    String(
+      CONFIG.API_BASE || ""
+    )
+      .replace(
+        /\/+$/,
+        ""
+      );
+
+  const normalized =
+    path.startsWith(
+      "/"
+    )
+      ? path
+      : `/${path}`;
+
+  return `${base}${normalized}`;
+
+}
+
+
+/* ============================================================
+   ERROR PARSING
+   ============================================================ */
+
+function parseJson(
+  text
+) {
+
+  try {
+
+    return JSON.parse(
+      text || "{}"
+    );
+
+  } catch {
+
+    return {};
+
   }
 
-  downloaderMessage.textContent =
-    "";
+}
 
-  downloaderMessage.classList.remove(
-    "success"
+
+function extractErrorMessage(
+  text,
+  fallback
+) {
+
+  const data =
+    parseJson(
+      text
+    );
+
+  return (
+    data?.message ||
+    fallback
   );
 
 }
 
 
 /* ============================================================
-   URL VALIDATION
+   URL HELPERS
    ============================================================ */
 
-function isValidHttpUrl(
+function getPreviewUrl(
+  id
+) {
+
+  return apiUrl(
+    `/api/files/${encodeURIComponent(
+      id
+    )}`
+  );
+
+}
+
+
+function isHttpUrl(
   value
 ) {
 
   try {
 
     const url =
-      new URL(value);
+      new URL(
+        value
+      );
 
     return (
       url.protocol ===
-        "http:" ||
+        "https:" ||
       url.protocol ===
-        "https:"
+        "http:"
     );
 
   } catch {
@@ -2772,7 +2031,9 @@ function isTikTokUrl(
   try {
 
     const url =
-      new URL(value);
+      new URL(
+        value
+      );
 
     const host =
       url.hostname
@@ -2800,47 +2061,238 @@ function isTikTokUrl(
 
 
 /* ============================================================
-   BUTTON STATE
+   UI AUTH
    ============================================================ */
 
-function setButtonBusy(
-  button,
-  busy,
-  busyText
+function showAuth() {
+
+  authScreen?.classList.remove(
+    "hidden"
+  );
+
+  appScreen?.classList.add(
+    "hidden"
+  );
+
+  showLogin();
+
+}
+
+
+function showSetup() {
+
+  authScreen?.classList.remove(
+    "hidden"
+  );
+
+  appScreen?.classList.add(
+    "hidden"
+  );
+
+  setupBox?.classList.remove(
+    "hidden"
+  );
+
+  loginBox?.classList.add(
+    "hidden"
+  );
+
+  if (authTitle) {
+
+    authTitle.textContent =
+      "Buat BRANKAS";
+
+  }
+
+  if (authSubtitle) {
+
+    authSubtitle.textContent =
+      "Buat password utama dan masukkan redeem code.";
+
+  }
+
+}
+
+
+function showLogin() {
+
+  authScreen?.classList.remove(
+    "hidden"
+  );
+
+  appScreen?.classList.add(
+    "hidden"
+  );
+
+  setupBox?.classList.add(
+    "hidden"
+  );
+
+  loginBox?.classList.remove(
+    "hidden"
+  );
+
+  if (authTitle) {
+
+    authTitle.textContent =
+      "Buka BRANKAS";
+
+  }
+
+  if (authSubtitle) {
+
+    authSubtitle.textContent =
+      "Masukkan password untuk membuka vault.";
+
+  }
+
+}
+
+
+function showApp() {
+
+  authScreen?.classList.add(
+    "hidden"
+  );
+
+  appScreen?.classList.remove(
+    "hidden"
+  );
+
+  switchPage(
+    state.activePage
+  );
+
+  updateStatus();
+
+}
+
+
+/* ============================================================
+   AUTH ERROR
+   ============================================================ */
+
+function showAuthError(
+  message
 ) {
 
-  if (!button) {
+  showLogin();
+
+  showToast(
+    message,
+    "error"
+  );
+
+}
+
+
+/* ============================================================
+   STATUS
+   ============================================================ */
+
+function updateStatus() {
+
+  if (!statusText) {
     return;
   }
 
-  if (busy) {
+  if (
+    hasValidSession()
+  ) {
 
-    if (
-      !button.dataset.originalText
-    ) {
+    statusText.textContent =
+      "Terhubung";
 
-      button.dataset.originalText =
-        button.textContent;
-
-    }
-
-    button.disabled =
-      true;
-
-    button.textContent =
-      busyText ||
-      "Memproses...";
+    statusText.dataset.status =
+      "online";
 
   } else {
 
-    button.disabled =
-      false;
+    statusText.textContent =
+      "Terkunci";
 
-    button.textContent =
-      button.dataset.originalText ||
-      button.textContent;
+    statusText.dataset.status =
+      "offline";
 
-    delete button.dataset.originalText;
+  }
+
+}
+
+
+/* ============================================================
+   BUSY
+   ============================================================ */
+
+function setBusy(
+  busy,
+  container
+) {
+
+  state.busy =
+    busy;
+
+  if (!container) {
+    return;
+  }
+
+  const buttons =
+    container.querySelectorAll(
+      "button"
+    );
+
+  buttons.forEach(
+    (button) => {
+
+      button.disabled =
+        busy;
+
+    }
+  );
+
+}
+
+
+/* ============================================================
+   UPLOAD PROGRESS
+   ============================================================ */
+
+function setUploadProgress(
+  percent,
+  message
+) {
+
+  if (
+    uploadProgress
+  ) {
+
+    uploadProgress.classList.toggle(
+      "hidden",
+      !message
+    );
+
+  }
+
+  if (
+    uploadProgressBar
+  ) {
+
+    uploadProgressBar.style.width =
+      `${Math.max(
+        0,
+        Math.min(
+          100,
+          percent
+        )
+      )}%`;
+
+  }
+
+  if (
+    uploadStatus
+  ) {
+
+    uploadStatus.textContent =
+      message || "";
 
   }
 
@@ -2851,72 +2303,59 @@ function setButtonBusy(
    TOAST
    ============================================================ */
 
-let toastTimer = null;
-
 function showToast(
-  message
+  message,
+  type =
+    "info"
 ) {
 
-  if (!toast) {
-    return;
-  }
+  if (!toastContainer) {
 
-  toast.textContent =
-    String(message || "");
-
-  toast.classList.add(
-    "show"
-  );
-
-  clearTimeout(
-    toastTimer
-  );
-
-  toastTimer =
-    setTimeout(
-      () => {
-
-        toast.classList.remove(
-          "show"
-        );
-
-      },
-      3000
+    window.alert(
+      message
     );
 
-}
-
-
-/* ============================================================
-   KEYBOARD
-   ============================================================ */
-
-function handleKeyboard(
-  event
-) {
-
-  if (
-    event.key ===
-    "Escape"
-  ) {
-
-    if (
-      !viewerModal.classList.contains(
-        "hidden"
-      )
-    ) {
-
-      closeViewer();
-
-    }
+    return;
 
   }
 
+  const toast =
+    document.createElement(
+      "div"
+    );
+
+  toast.className =
+    `toast toast-${type}`;
+
+  toast.textContent =
+    message;
+
+  toastContainer.appendChild(
+    toast
+  );
+
+  setTimeout(
+    () => {
+
+      toast.classList.add(
+        "hide"
+      );
+
+      setTimeout(
+        () =>
+          toast.remove(),
+        250
+      );
+
+    },
+    3500
+  );
+
 }
 
 
 /* ============================================================
-   FORMATTING
+   FORMATTERS
    ============================================================ */
 
 function formatBytes(
@@ -2924,48 +2363,50 @@ function formatBytes(
 ) {
 
   const value =
-    Number(bytes);
+    Number(
+      bytes || 0
+    );
 
   if (
-    !Number.isFinite(value) ||
-    value <= 0
+    value < 1024
   ) {
 
-    return "0 B";
+    return `${value} B`;
 
   }
 
   const units = [
-    "B",
     "KB",
     "MB",
     "GB",
     "TB"
   ];
 
-  const index =
-    Math.min(
-      Math.floor(
-        Math.log(value) /
-        Math.log(1024)
-      ),
+  let size =
+    value / 1024;
+
+  let index =
+    0;
+
+  while (
+    size >= 1024 &&
+    index <
       units.length - 1
-    );
+  ) {
 
-  const amount =
-    value /
-    Math.pow(
-      1024,
-      index
-    );
+    size /=
+      1024;
 
-  return `${
-    amount >= 100
-      ? amount.toFixed(0)
-      : amount >= 10
-        ? amount.toFixed(1)
-        : amount.toFixed(2)
-  } ${units[index]}`;
+    index +=
+      1;
+
+  }
+
+  return `${size.toFixed(
+    size >= 100
+      ? 0
+      : 1
+  )} ${units[index]}`;
 
 }
 
@@ -2974,61 +2415,89 @@ function formatDate(
   value
 ) {
 
-  if (!value) {
+  try {
+
+    return new Intl.DateTimeFormat(
+      "id-ID",
+      {
+        dateStyle:
+          "medium",
+
+        timeStyle:
+          "short"
+      }
+    ).format(
+      new Date(
+        value
+      )
+    );
+
+  } catch {
+
     return "-";
+
   }
 
-  const date =
-    new Date(value);
+}
+
+
+function getFileIcon(
+  mime
+) {
 
   if (
-    Number.isNaN(
-      date.getTime()
+    mime ===
+    "application/pdf"
+  ) {
+
+    return "PDF";
+
+  }
+
+  if (
+    mime.includes(
+      "zip"
+    ) ||
+    mime.includes(
+      "rar"
+    ) ||
+    mime.includes(
+      "7z"
     )
   ) {
 
-    return "-";
+    return "ZIP";
 
   }
 
-  return new Intl.DateTimeFormat(
-    "id-ID",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric"
-    }
-  ).format(date);
+  if (
+    mime.startsWith(
+      "audio/"
+    )
+  ) {
+
+    return "AUDIO";
+
+  }
+
+  if (
+    mime.startsWith(
+      "text/"
+    )
+  )
+  {
+
+    return "TXT";
+
+  }
+
+  return "FILE";
 
 }
 
 
 /* ============================================================
-   SECURITY / PAGE LIFECYCLE
-   ============================================================ */
-
-window.addEventListener(
-  "pageshow",
-  () => {
-
-    if (
-      state.sessionExpires &&
-      Date.now() >=
-        state.sessionExpires
-    ) {
-
-      clearSession();
-
-      showLogin();
-
-    }
-
-  }
-);
-
-
-/* ============================================================
-   SESSION EXPIRATION CHECK
+   SESSION EXPIRATION WATCHER
    ============================================================ */
 
 setInterval(
@@ -3036,25 +2505,34 @@ setInterval(
 
     if (
       state.token &&
-      state.sessionExpires &&
-      Date.now() >=
-        state.sessionExpires
+      !hasValidSession()
     ) {
 
       clearSession();
 
-      state.files = [];
+      showAuth();
 
-      renderFiles();
-
-      showLogin();
-
-      showAuthMessage(
-        "Session telah berakhir. Silakan masuk kembali."
+      showToast(
+        "Session telah berakhir. Silakan login kembali.",
+        "error"
       );
 
     }
 
   },
-  30 * 1000
+  10_000
 );
+
+
+/* ============================================================
+   EXPORT DEBUG INFO
+   ============================================================ */
+
+window.BRANKAS =
+  {
+    version:
+      "3.0.0",
+
+    apiBase:
+      CONFIG.API_BASE
+  };
