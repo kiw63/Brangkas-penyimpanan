@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+  >
+
+  <meta
+    name="description"
+    content="BRANKAS - Penyimpanan file pribadi yang aman."
+  >
+
+  <meta name="theme-color" content="#f7f1e5">
+
+  <title>BRANKAS — Secure Vault</title>
+
+  <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+
+  <!-- =========================================================
+       AUTH / SETUP SCREEN
+       ========================================================= -->
+
+  <main id="authScreen" class="auth-screen">
+
+    <section class="auth-card">
+
+      <div class="brand">
+        <div class="brand-mark">B</div>
+
+        <div>
+          <h1>BRANKAS</h1>
+          <p>PRIVATE DIGITAL VAULT</p>
+        </div>
+      </div>
+
+      <!-- =========================
+           FIRST SETUP
+           ========================= -->
+
+      <div id="setupPanel" class="auth-panel hidden">
+
+        <div class="section-label">
+          FIRST TIME SETUP
+        </div>
+
+        <h2>Buat Brankas</h2>
+
+        <p class="muted">
+          Buat password utama dan masukkan redeem code
+          untuk mengaktifkan brankas kamu.
+        </p>
+
+        <form id="setupForm">
+
+          <label for="setupPassword">
+            Password utama
+          </label>
+
+          <input
+            id="setupPassword"
+            name="password"
+            type="password"
+            minlength="12"
+            autocomplete="new-password"
+            placeholder="Minimal 12 karakter"
+            required
+          >
+
+          <label for="setupPasswordConfirm">
+            Ulangi password
+          </label>
+
+          <input
+            id="setupPasswordConfirm"
+            type="password"
+            minlength="12"
+            autocomplete="new-password"
+            placeholder="Ulangi password"
+            required
+          >
+
+          <label for="redeemCode">
+            Redeem code
+          </label>
+
+          <input
+            id="redeemCode"
+            name="redeem"
+            type="text"
+            minlength="8"
+            autocomplete="off"
+            placeholder="Masukkan redeem code"
+            required
+          >
+
+          <button
+            type="submit"
+            class="primary-button"
+          >
+            Buat BRANKAS
+          </button>
+
+        </form>
+
+      </div>
+
+      <!-- =========================
+           LOGIN
+           ========================= -->
+
+      <div id="loginPanel" class="auth-panel hidden">
+
+        <div class="section-label">
+          SECURE ACCESS
+        </div>
+
+        <h2>Masuk ke Brankas</h2>
+
+        <p class="muted">
+          Masukkan password utama untuk membuka penyimpanan.
+        </p>
+
+        <form id="loginForm">
+
+          <label for="loginPassword">
+            Password
+          </label>
+
+          <input
+            id="loginPassword"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Password utama"
+            required
+          >
+
+          <button
+            type="submit"
+            class="primary-button"
+          >
+            Buka Brankas
+          </button>
+
+        </form>
+
+      </div>
+
+      <div
+        id="authMessage"
+        class="message"
+        role="alert"
+        aria-live="polite"
+      ></div>
+
+    </section>
+
+  </main>
+
+
+  <!-- =========================================================
+       APPLICATION
+       ========================================================= -->
+
+  <div id="app" class="app hidden">
+
+    <!-- =========================
+         HEADER
+         ========================= -->
+
+    <header class="topbar">
+
+      <div class="brand compact">
+
+        <div class="brand-mark">
+          B
+        </div>
+
+        <div>
+          <strong>BRANKAS</strong>
+          <span>PRIVATE VAULT</span>
+        </div>
+
+      </div>
+
+      <div class="topbar-actions">
+
+        <span
+          id="connectionStatus"
+          class="status-badge"
+        >
+          Checking...
+        </span>
+
+        <button
+          id="logoutButton"
+          class="ghost-button"
+          type="button"
+        >
+          Keluar
+        </button>
+
+      </div>
+
+    </header>
+
+
+    <!-- =========================
+         NAVIGATION
+         ========================= -->
+
+    <nav class="navigation">
+
+      <button
+        class="nav-button active"
+        data-page="vault"
+        type="button"
+      >
+        <span>▣</span>
+        <span>Brankas</span>
+      </button>
+
+      <button
+        class="nav-button"
+        data-page="downloader"
+        type="button"
+      >
+        <span>↓</span>
+        <span>Video Downloader</span>
+      </button>
+
+    </nav>
+
+
+    <!-- =========================
+         MAIN CONTENT
+         ========================= -->
+
+    <main class="content">
+
+      <!-- =====================================================
+           VAULT PAGE
+           ===================================================== -->
+
+      <section
+        id="vaultPage"
+        class="page active"
+      >
+
+        <div class="page-heading">
+
+          <div>
+            <div class="section-label">
+              YOUR STORAGE
+            </div>
+
+            <h1>Brankas</h1>
+
+            <p class="muted">
+              Semua file pribadi kamu berada di sini.
+            </p>
+          </div>
+
+          <div class="heading-actions">
+
+            <button
+              id="refreshFilesButton"
+              class="secondary-button"
+              type="button"
+            >
+              ↻ Refresh
+            </button>
+
+            <label
+              for="fileInput"
+              class="primary-button upload-label"
+            >
+              + Upload File
+            </label>
+
+            <input
+              id="fileInput"
+              type="file"
+              multiple
+              hidden
+            >
+
+          </div>
+
+        </div>
+
+
+        <!-- =========================
+             STORAGE INFO
+             ========================= -->
+
+        <div class="storage-card">
+
+          <div class="storage-info">
+
+            <div class="storage-icon">
+              B
+            </div>
+
+            <div>
+              <strong>Private Cloud Vault</strong>
+
+              <span>
+                File disimpan di storage pribadi
+                dan tidak dipublikasikan.
+              </span>
+            </div>
+
+          </div>
+
+          <div class="storage-status">
+            <span id="fileCount">0 file</span>
+          </div>
+
+        </div>
+
+
+        <!-- =========================
+             UPLOAD PROGRESS
+             ========================= -->
+
+        <div
+          id="uploadArea"
+          class="upload-area hidden"
+        >
+
+          <div class="upload-area-header">
+
+            <strong>
+              Upload berjalan
+            </strong>
+
+            <span id="uploadProgressText">
+              0%
+            </span>
+
+          </div>
+
+          <div class="progress-track">
+
+            <div
+              id="uploadProgressBar"
+              class="progress-bar"
+              style="width: 0%"
+            ></div>
+
+          </div>
+
+          <p
+            id="uploadStatusText"
+            class="muted"
+          >
+            Menyiapkan upload...
+          </p>
+
+        </div>
+
+
+        <!-- =========================
+             FILE GRID
+             ========================= -->
+
+        <div
+          id="emptyState"
+          class="empty-state"
+        >
+
+          <div class="empty-icon">
+            ◇
+          </div>
+
+          <h2>Brankas masih kosong</h2>
+
+          <p>
+            Upload video, gambar, PDF, ZIP, audio,
+            atau file lainnya.
+          </p>
+
+          <label
+            for="fileInputEmpty"
+            class="primary-button"
+          >
+            Upload File Pertama
+          </label>
+
+          <input
+            id="fileInputEmpty"
+            type="file"
+            multiple
+            hidden
+          >
+
+        </div>
+
+
+        <div
+          id="fileGrid"
+          class="file-grid"
+        ></div>
+
+      </section>
+
+
+      <!-- =====================================================
+           DOWNLOADER PAGE
+           ===================================================== -->
+
+      <section
+        id="downloaderPage"
+        class="page"
+      >
+
+        <div class="page-heading">
+
+          <div>
+
+            <div class="section-label">
+              IMPORT MEDIA
+            </div>
+
+            <h1>Video Downloader</h1>
+
+            <p class="muted">
+              Masukkan URL media dan simpan hasilnya
+              langsung ke BRANKAS.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <!-- =========================
+             DOWNLOADER CARD
+             ========================= -->
+
+        <div class="downloader-card">
+
+          <div class="downloader-tabs">
+
+            <button
+              class="source-tab active"
+              data-source="vid3y"
+              type="button"
+            >
+              Vid3y
+            </button>
+
+            <button
+              class="source-tab"
+              data-source="tiktok"
+              type="button"
+            >
+              TikTok
+            </button>
+
+          </div>
+
+
+          <!-- =========================
+               VID3Y
+               ========================= -->
+
+          <div
+            id="vid3ySource"
+            class="source-panel active"
+          >
+
+            <label for="vid3yUrl">
+              URL Vid3y
+            </label>
+
+            <input
+              id="vid3yUrl"
+              type="url"
+              inputmode="url"
+              placeholder="https://vid3y.my.id/?v=..."
+              autocomplete="off"
+            >
+
+            <p class="field-help">
+              URL harus mengarah ke media yang dapat
+              diambil oleh backend BRANKAS.
+            </p>
+
+            <button
+              id="vid3yDownloadButton"
+              class="primary-button wide"
+              type="button"
+            >
+              Simpan ke Brankas
+            </button>
+
+          </div>
+
+
+          <!-- =========================
+               TIKTOK
+               ========================= -->
+
+          <div
+            id="tiktokSource"
+            class="source-panel"
+          >
+
+            <label for="tiktokUrl">
+              URL TikTok
+            </label>
+
+            <input
+              id="tiktokUrl"
+              type="url"
+              inputmode="url"
+              placeholder="https://www.tiktok.com/..."
+              autocomplete="off"
+            >
+
+            <p class="field-help">
+              Hanya gunakan untuk konten yang kamu
+              berhak menyimpan atau mengunduh.
+            </p>
+
+            <button
+              id="tiktokDownloadButton"
+              class="primary-button wide"
+              type="button"
+            >
+              Simpan ke Brankas
+            </button>
+
+          </div>
+
+
+          <div
+            id="downloaderMessage"
+            class="message"
+            role="alert"
+            aria-live="polite"
+          ></div>
+
+        </div>
+
+
+        <!-- =========================
+             DOWNLOADER INFO
+             ========================= -->
+
+        <div class="info-grid">
+
+          <article class="info-card">
+
+            <div class="info-number">
+              01
+            </div>
+
+            <h3>Masukkan URL</h3>
+
+            <p>
+              Tempel URL media yang ingin disimpan.
+            </p>
+
+          </article>
+
+          <article class="info-card">
+
+            <div class="info-number">
+              02
+            </div>
+
+            <h3>Server memproses</h3>
+
+            <p>
+              Proses dilakukan oleh backend,
+              bukan langsung dari browser.
+            </p>
+
+          </article>
+
+          <article class="info-card">
+
+            <div class="info-number">
+              03
+            </div>
+
+            <h3>Masuk ke Brankas</h3>
+
+            <p>
+              File hasil import akan muncul
+              di penyimpanan kamu.
+            </p>
+
+          </article>
+
+        </div>
+
+      </section>
+
+    </main>
+
+
+    <!-- =========================================================
+         FOOTER
+         ========================================================= -->
+
+    <footer class="footer">
+
+      <span>
+        BRANKAS © 2026
+      </span>
+
+      <span>
+        PRIVATE DIGITAL STORAGE
+      </span>
+
+    </footer>
+
+  </div>
+
+
+  <!-- =========================================================
+       FILE VIEWER MODAL
+       ========================================================= -->
+
+  <div
+    id="viewerModal"
+    class="modal hidden"
+    aria-hidden="true"
+  >
+
+    <div
+      class="modal-backdrop"
+      id="modalBackdrop"
+    ></div>
+
+    <section
+      class="viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="viewerTitle"
+    >
+
+      <header class="viewer-header">
+
+        <div>
+
+          <div class="section-label">
+            FILE PREVIEW
+          </div>
+
+          <h2 id="viewerTitle">
+            Preview
+          </h2>
+
+        </div>
+
+        <button
+          id="closeViewerButton"
+          class="close-button"
+          type="button"
+          aria-label="Tutup"
+        >
+          ×
+        </button>
+
+      </header>
+
+      <div
+        id="viewerContent"
+        class="viewer-content"
+      ></div>
+
+      <footer class="viewer-footer">
+
+        <button
+          id="viewerDownloadButton"
+          class="primary-button"
+          type="button"
+        >
+          ↓ Download
+        </button>
+
+      </footer>
+
+    </section>
+
+  </div>
+
+
+  <!-- =========================================================
+       GLOBAL TOAST
+       ========================================================= -->
+
+  <div
+    id="toast"
+    class="toast"
+    role="status"
+    aria-live="polite"
+  ></div>
+
+
+  <script src="./app.js" defer></script>
+
+</body>
+  </html>
