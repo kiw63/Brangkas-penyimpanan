@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRANKAS V2</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="auth" class="center">
+  <div class="card auth">
+    <div class="seal">◈</div><p class="eyebrow">BRANKAS V2</p>
+    <h1 id="authTitle">Buka Brankas</h1>
+    <p id="authSub">Masukkan password untuk masuk.</p>
+    <input id="password" type="password" minlength="12" maxlength="128" placeholder="Password minimal 12 karakter">
+    <input id="redeem" type="password" maxlength="128" placeholder="Kode redeem (pertama kali)" hidden>
+    <button id="authBtn">BUKA BRANKAS</button><p id="err" class="err"></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header><div><span class="eyebrow">PRIVATE DIGITAL VAULT</span><h1>BRANKAS</h1></div>
+<nav><button data-page="vault" class="active">Brankas</button><button data-page="downloader">Video Downloader</button><button id="lock">Kunci</button></nav></header>
+
+<main>
+<section id="vault" class="page">
+  <div class="row"><div><h2>Isi Brankas</h2><p class="muted">File tersimpan di server vault.</p></div>
+  <label class="upload">+ Tambah File<input id="file" type="file" hidden></label></div>
+  <div class="toolbar"><input id="search" placeholder="Cari file…"><button id="refresh">Refresh</button></div>
+  <div id="grid" class="grid"></div>
+</section>
+
+<section id="downloader" class="page" hidden>
+  <div class="card wide"><p class="eyebrow">DIRECT TO VAULT</p><h2>Video Downloader</h2>
+  <p class="muted">Hanya dua sumber yang ditargetkan: URL Vid3y dan TikTok. Hasil yang berhasil diproses masuk langsung ke Brankas.</p>
+  <div class="tabs"><button data-source="vid3y" class="active">Vid3y</button><button data-source="tiktok">TikTok</button></div>
+  <input id="url" placeholder="Tempel link video di sini…">
+  <button id="import">SIMPAN KE BRANKAS</button>
+  <p id="importStatus" class="status"></p>
+  </div>
+  <div class="card wide note"><b>Penting:</b> URL Vid3y harus benar-benar mengembalikan media. Jika URL hanya membuka halaman player HTML, server tidak mengeksekusi/scrape JavaScript halaman tersebut; gunakan endpoint media/API resmi. TikTok URL umum juga tidak diperlakukan sebagai API resmi download sembarang video.</div>
+</section>
+</main>
+</div>
+<div id="viewer" class="modal" hidden><div class="modal-card"><button id="close">×</button><h2 id="vtitle"></h2><div id="vbody"></div><div class="actions"><button id="vd">Download ke perangkat</button><button id="vx" class="danger">Hapus</button></div></div></div>
+<script src="/app.js" defer></script>
+</body></html>
