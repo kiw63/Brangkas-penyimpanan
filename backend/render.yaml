@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: brankas-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
